@@ -66,7 +66,7 @@ This connected loop is the product’s main value.
 
 ## Feature Scope
 
-## ✅ Core Features (Target MVP)
+### ✅ Core Features (Target MVP)
 
 ### 🍳 Chef Module
 - Fridge scanner (camera-based ingredient detection)
@@ -140,7 +140,7 @@ FridgeToFork uses native capabilities through Expo APIs:
 ## Tech Stack
 
 - **Framework:** React Native with Expo
-- **Language:** TypeScript
+- **Language:** JavaScript (React Native)
 - **Navigation:** React Navigation (bottom tabs + native stack)
 - **State:** Redux Toolkit + React Redux
 - **Persistence:** AsyncStorage
@@ -161,60 +161,58 @@ Target architecture:
 ```text
 FridgeToFork/
 ├── app.json
-├── App.tsx
+├── App.js
 ├── README.md
 ├── src/
 │   ├── navigation/
-│   │   ├── RootNavigator.tsx
-│   │   ├── ChefStack.tsx
-│   │   ├── CartStack.tsx
-│   │   ├── HomeStack.tsx
-│   │   └── SettingsStack.tsx
+│   │   ├── RootNavigator.js
+│   │   ├── ChefStack.js
+│   │   ├── CartStack.js
+│   │   ├── HomeStack.js
+│   │   └── SettingsStack.js
 │   ├── screens/
 │   │   ├── Home/
-│   │   │   ├── HomeScreen.tsx
-│   │   │   └── NotificationsScreen.tsx
+│   │   │   ├── HomeScreen.js
+│   │   │   └── NotificationsScreen.js
 │   │   ├── Chef/
-│   │   │   ├── ChefHomeScreen.tsx
-│   │   │   ├── FridgeScanScreen.tsx
-│   │   │   ├── RecipeResultScreen.tsx
-│   │   │   └── RecipeDetailScreen.tsx
+│   │   │   ├── ChefHomeScreen.js
+│   │   │   ├── FridgeScanScreen.js
+│   │   │   ├── RecipeResultScreen.js
+│   │   │   └── RecipeDetailScreen.js
 │   │   ├── Cart/
-│   │   │   ├── CartHomeScreen.tsx
-│   │   │   ├── ReceiptScanScreen.tsx
-│   │   │   └── SwapSuggestionScreen.tsx
+│   │   │   ├── CartHomeScreen.js
+│   │   │   ├── ReceiptScanScreen.js
+│   │   │   └── SwapSuggestionScreen.js
 │   │   └── Settings/
-│   │       ├── SettingsHomeScreen.tsx
-│   │       ├── BudgetGoalScreen.tsx
-│   │       └── ThemeScreen.tsx
+│   │       ├── SettingsHomeScreen.js
+│   │       ├── BudgetGoalScreen.js
+│   │       └── ThemeScreen.js
 │   ├── store/
-│   │   ├── index.ts
+│   │   ├── index.js
 │   │   └── slices/
-│   │       ├── fridgeSlice.ts
-│   │       ├── recipesSlice.ts
-│   │       ├── cartSlice.ts
-│   │       ├── swapsSlice.ts
-│   │       └── settingsSlice.ts
+│   │       ├── fridgeSlice.js
+│   │       ├── recipesSlice.js
+│   │       ├── cartSlice.js
+│   │       ├── swapsSlice.js
+│   │       └── settingsSlice.js
 │   ├── components/
-│   │   ├── RecipeCard.tsx
-│   │   ├── IngredientChip.tsx
-│   │   ├── SpendingChart.tsx
-│   │   ├── SwapCard.tsx
-│   │   ├── DailyScoreRing.tsx
-│   │   └── LoadingOverlay.tsx
+│   │   ├── RecipeCard.js
+│   │   ├── IngredientChip.js
+│   │   ├── SpendingChart.js
+│   │   ├── SwapCard.js
+│   │   ├── DailyScoreRing.js
+│   │   └── LoadingOverlay.js
 │   ├── theme/
-│   │   ├── colors.ts
-│   │   ├── typography.ts
-│   │   ├── spacing.ts
-│   │   └── ThemeContext.tsx
+│   │   ├── index.js
+│   │   └── ThemeContext.js
 │   ├── hooks/
-│   │   ├── useTheme.ts
-│   │   ├── useCamera.ts
-│   │   └── useHaptics.ts
+│   │   ├── useTheme.js
+│   │   ├── useCamera.js
+│   │   └── useHaptics.js
 │   └── utils/
-│       ├── storage.ts
-│       ├── claudeApi.ts
-│       └── notifications.ts
+│       ├── storage.js
+│       ├── claudeApi.js
+│       └── notifications.js
 ```
 
 ---
@@ -270,14 +268,14 @@ AsyncStorage is used to persist user data locally:
 ### Persistence principles
 - Save on successful state mutation
 - Hydrate once at app launch
-- Keep storage keys centralized in `src/utils/storage.ts`
+- Keep storage keys centralized in `src/utils/storage.js`
 - Add versioned migration strategy as schema evolves
 
 ---
 
 ## AI Service Design
 
-AI requests are routed through a single service layer (planned `src/utils/claudeApi.ts`) to keep UI code clean.
+AI requests are routed through a single service layer (planned `src/utils/claudeApi.js`) to keep UI code clean.
 
 ### Planned request types
 - `scanFridge(imageBase64)` → ingredient list
@@ -374,7 +372,7 @@ npm run web
 This project is intentionally developed in small, reviewable commits.
 
 ### Milestone 1 — Foundation
-- Initialize Expo TypeScript app
+- Initialize Expo JavaScript app
 - Install dependencies
 - Validate SDK compatibility
 
@@ -414,7 +412,7 @@ This project is intentionally developed in small, reviewable commits.
 
 Planned quality practices:
 
-- TypeScript strict mode for safer refactors
+- Clear module boundaries for safer refactors
 - Domain-level utility functions for testable logic
 - Linting + formatting for consistency
 - Defensive parsing for AI and OCR responses
