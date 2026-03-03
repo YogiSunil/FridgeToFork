@@ -14,10 +14,8 @@ export const ThemeProvider = ({ children }) => {
   const [isDark, setIsDark] = useState(systemScheme === 'dark');
 
   useEffect(() => {
-    getItem('theme').then((value) => {
-      if (value !== null) {
-        setIsDark(value === 'dark');
-      }
+    getItem('theme').then(v => {
+      if (v !== null) setIsDark(v === 'dark');
     });
   }, []);
 
@@ -28,7 +26,13 @@ export const ThemeProvider = ({ children }) => {
   };
 
   return (
-    <ThemeContext.Provider value={{ isDark, colors: isDark ? darkColors : lightColors, toggleTheme }}>
+    <ThemeContext.Provider
+      value={{
+        isDark,
+        colors: isDark ? darkColors : lightColors,
+        toggleTheme,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );
