@@ -44,33 +44,29 @@ FridgeToFork connects these into one flow:
 
 ---
 
-## Screenshot Placeholders
+## Project Screenshots
 
-Add your screenshots in a folder named `docs/images` and replace file names below.
+| Home Dashboard | Smart Cart Dashboard |
+|---|---|
+| ![Home Dashboard](docs/images/screenshot-1.jpg) | ![Smart Cart Dashboard](docs/images/screenshot-2.jpg) |
 
-### 1) Home Dashboard
-![Home Dashboard](docs/images/home-dashboard.png)
+| Receipt Camera Scan | Receipt Parsed Items |
+|---|---|
+| ![Receipt Camera Scan](docs/images/screenshot-3.jpg) | ![Receipt Parsed Items](docs/images/screenshot-4.jpg) |
 
-### 2) Fridge Scan
-![Fridge Scan](docs/images/fridge-scan.png)
+| Edit Receipt | My Kitchen |
+|---|---|
+| ![Edit Receipt](docs/images/screenshot-5.jpg) | ![My Kitchen](docs/images/screenshot-6.jpg) |
 
-### 3) Fridge Scan Result (Item List)
-![Fridge Items](docs/images/fridge-items.png)
+| Recipe Filters | Recipe Result |
+|---|---|
+| ![Recipe Filters](docs/images/screenshot-7.jpg) | ![Recipe Result](docs/images/screenshot-8.jpg) |
 
-### 4) Recipe Generation
-![Recipe Result](docs/images/recipe-result.png)
+| Recipe Detail | Settings |
+|---|---|
+| ![Recipe Detail](docs/images/screenshot-9.jpg) | ![Settings](docs/images/screenshot-10.jpg) |
 
-### 5) Receipt Scan
-![Receipt Scan](docs/images/receipt-scan.png)
 
-### 6) Receipt Parsed Items
-![Receipt Items](docs/images/receipt-items.png)
-
-### 7) Swap Suggestions
-![Swap Suggestions](docs/images/swap-suggestions.png)
-
-### 8) Settings
-![Settings](docs/images/settings.png)
 
 ---
 
