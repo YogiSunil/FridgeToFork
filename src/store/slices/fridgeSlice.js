@@ -15,9 +15,9 @@ const toInt = (value, fallback = 0) => {
 
 export const scanFridgeThunk = createAsyncThunk(
   'fridge/scan',
-  async (base64Image, { rejectWithValue }) => {
+  async (imageInput, { rejectWithValue }) => {
     try {
-      const ingredients = await scanFridgeWithClaude(base64Image);
+      const ingredients = await scanFridgeWithClaude(imageInput);
       await setJSON('fridge_ingredients', ingredients);
       return ingredients;
     } catch (e) {

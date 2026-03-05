@@ -11,7 +11,7 @@ import SettingsStack from './SettingsStack';
 const Tab = createBottomTabNavigator();
 
 const TabIcon = ({ emoji, label, focused, color }) => (
-  <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4 }}>
+  <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 3 }}>
     <Text style={{ fontSize: focused ? 24 : 20 }}>{emoji}</Text>
     <Text style={{
       fontSize: 10,

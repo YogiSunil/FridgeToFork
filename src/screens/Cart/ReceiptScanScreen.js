@@ -24,6 +24,16 @@ const getImageMediaTypes = () => {
   return ['images'];
 };
 
+const inferMimeType = (uri = '', fallback = 'image/jpeg') => {
+  if (typeof uri !== 'string') return fallback;
+  const ext = uri.split('.').pop()?.toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'heic') return 'image/heic';
+  if (ext === 'heif') return 'image/heif';
+  return fallback;
+};
+
 export default function ReceiptScanScreen() {
   const { colors } = useTheme();
   const dispatch = useDispatch();
@@ -44,14 +54,21 @@ export default function ReceiptScanScreen() {
   };
 
   const getErrorMessage = (error, fallback) => {
-    if (typeof error === 'string' && error.trim()) return error;
-    if (error?.message) return error.message;
+    const raw = typeof error === 'string' && error.trim()
+      ? error
+      : (error?.message || '');
+
+    if (/unable to process input image/i.test(raw)) {
+      return 'Image could not be read clearly. Try Upload Receipt Photo, keep full receipt in frame, and use a sharper image.';
+    }
+
+    if (raw) return raw;
     return fallback;
   };
 
-  const processReceiptBase64 = async (base64Data) => {
+  const processReceiptBase64 = async (base64Data, mimeType = 'image/jpeg') => {
     if (!base64Data) throw new Error('No image data');
-    await dispatch(scanReceiptThunk(base64Data)).unwrap();
+    await dispatch(scanReceiptThunk({ imageBase64: base64Data, mimeType })).unwrap();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setPhase('review');
   };
@@ -60,8 +77,8 @@ export default function ReceiptScanScreen() {
     if (!cameraRef.current) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.5 });
-      await processReceiptBase64(photo?.base64);
+      const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.9 });
+      await processReceiptBase64(photo?.base64, inferMimeType(photo?.uri, 'image/jpeg'));
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Scan Failed', getErrorMessage(e, 'Could not read receipt. Try better lighting.'));
@@ -94,6 +111,7 @@ export default function ReceiptScanScreen() {
 
       if (selectedAssets.length === 1) {
         const selected = selectedAssets[0];
+        const mimeType = selected?.mimeType || inferMimeType(selected?.uri);
         let base64Data = selected?.base64;
 
         if (!base64Data && selected?.uri) {
@@ -102,20 +120,21 @@ export default function ReceiptScanScreen() {
           });
         }
 
-        await processReceiptBase64(base64Data);
+        await processReceiptBase64(base64Data, mimeType);
         return;
       }
 
       let savedCount = 0;
       for (const asset of selectedAssets) {
         try {
+          const mimeType = asset?.mimeType || inferMimeType(asset?.uri);
           let base64Data = asset?.base64;
           if (!base64Data && asset?.uri) {
             base64Data = await FileSystem.readAsStringAsync(asset.uri, {
               encoding: FileSystem.EncodingType.Base64,
             });
           }
-          const items = await dispatch(scanReceiptThunk(base64Data)).unwrap();
+          const items = await dispatch(scanReceiptThunk({ imageBase64: base64Data, mimeType })).unwrap();
           dispatch(saveReceipt({ items, swaps: [] }));
           savedCount += 1;
         } catch {

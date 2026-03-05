@@ -27,9 +27,9 @@ const normalizeReceiptItems = (items) => {
 
 export const scanReceiptThunk = createAsyncThunk(
   'cart/scanReceipt',
-  async (base64Image, { rejectWithValue }) => {
+  async (receiptInput, { rejectWithValue }) => {
     try {
-      return await scanReceiptWithClaude(base64Image);
+      return await scanReceiptWithClaude(receiptInput);
     } catch (e) {
       return rejectWithValue(e.message || 'Failed to scan receipt');
     }

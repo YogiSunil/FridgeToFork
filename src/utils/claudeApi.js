@@ -4,7 +4,6 @@ const REQUEST_TIMEOUT_MS = 45000;
 const MAX_RETRIES = 2;
 const RETRY_BACKOFF_MS = 1200;
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const MAX_IMAGE_BASE64_CHARS = 500000;
 const MAX_INGREDIENTS = 20;
 const MAX_SWAP_ITEMS = 20;
 
@@ -167,12 +166,13 @@ function normalizeText(value) {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
 }
 
-function trimImageBase64(base64) {
+function sanitizeImageBase64(base64) {
   const clean = normalizeText(base64);
   if (!clean) {
     return '';
   }
-  return clean.length > MAX_IMAGE_BASE64_CHARS ? clean.slice(0, MAX_IMAGE_BASE64_CHARS) : clean;
+  const dataUrlMatch = clean.match(/^data:[^;]+;base64,(.+)$/i);
+  return dataUrlMatch ? dataUrlMatch[1] : clean;
 }
 
 function normalizeIngredientNames(ingredients) {
@@ -229,12 +229,16 @@ function getCacheKey(path, payload) {
   return `${path}:${JSON.stringify(safePayload)}`;
 }
 
-export async function scanFridge(imageBase64) {
+export async function scanFridge(input) {
+  const imageBase64 = typeof input === 'string' ? input : input?.imageBase64;
+  const mimeType = normalizeText(typeof input === 'string' ? 'image/jpeg' : input?.mimeType) || 'image/jpeg';
+
   const data = await postJson('/ai/scan-fridge', {
-    imageBase64: trimImageBase64(imageBase64),
+    imageBase64: sanitizeImageBase64(imageBase64),
+    mimeType,
     budgetMode: 'low',
     output: 'json',
-    maxOutputTokens: 400,
+    maxOutputTokens: 1000,
   });
   return Array.isArray(data?.ingredients) ? data.ingredients : [];
 }
@@ -251,12 +255,16 @@ export async function generateRecipe(ingredients, cuisinePreference = 'any') {
   return data?.recipe || null;
 }
 
-export async function scanReceipt(imageBase64) {
+export async function scanReceipt(input) {
+  const imageBase64 = typeof input === 'string' ? input : input?.imageBase64;
+  const mimeType = normalizeText(typeof input === 'string' ? 'image/jpeg' : input?.mimeType) || 'image/jpeg';
+
   const data = await postJson('/ai/scan-receipt', {
-    imageBase64: trimImageBase64(imageBase64),
+    imageBase64: sanitizeImageBase64(imageBase64),
+    mimeType,
     budgetMode: 'low',
     output: 'json',
-    maxOutputTokens: 500,
+    maxOutputTokens: 1200,
   });
   return Array.isArray(data?.items) ? data.items : [];
 }
