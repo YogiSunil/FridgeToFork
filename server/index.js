@@ -387,6 +387,65 @@ function normalizeRecipeResponse(recipe, sourceIngredients = []) {
   };
 }
 
+function normalizeReceiptItemsResponse(items) {
+  if (!Array.isArray(items)) return [];
+
+  const allowedCategories = new Set([
+    'dairy', 'protein', 'vegetable', 'fruit', 'grain', 'snack', 'beverage', 'condiment', 'frozen', 'other',
+  ]);
+
+  const seen = new Set();
+  const normalized = [];
+
+  for (const item of items) {
+    const name = toText(item?.name).replace(/\s+/g, ' ');
+    const price = Number(item?.price);
+    if (!name || !Number.isFinite(price) || price < 0) continue;
+
+    const categoryRaw = toText(item?.category, 'other').toLowerCase();
+    const category = allowedCategories.has(categoryRaw) ? categoryRaw : 'other';
+    const key = `${name.toLowerCase()}-${Math.round(price * 100)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    normalized.push({
+      name,
+      price: Math.round(price * 100) / 100,
+      category,
+      isHealthy: Boolean(item?.isHealthy),
+    });
+  }
+
+  return normalized.slice(0, 60);
+}
+
+function normalizeFridgeIngredientsResponse(items) {
+  if (!Array.isArray(items)) return [];
+
+  const allowedCategories = new Set([
+    'dairy', 'protein', 'vegetable', 'fruit', 'grain', 'snack', 'beverage', 'condiment', 'frozen', 'other',
+  ]);
+
+  const seen = new Set();
+  const normalized = [];
+
+  for (const item of items) {
+    const name = toText(item?.name).replace(/\s+/g, ' ');
+    if (!name) continue;
+
+    const quantity = toText(item?.quantity, '1');
+    const categoryRaw = toText(item?.category, 'other').toLowerCase();
+    const category = allowedCategories.has(categoryRaw) ? categoryRaw : 'other';
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    normalized.push({ name, quantity, category });
+  }
+
+  return normalized.slice(0, 80);
+}
+
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
@@ -397,10 +456,14 @@ app.get('/health', (_req, res) => {
 
 app.post('/ai/scan-receipt', async (req, res) => {
   try {
-    const { imageBase64, maxOutputTokens } = req.body || {};
+    const { imageBase64, mimeType, maxOutputTokens } = req.body || {};
     if (!imageBase64) {
       return res.status(400).json({ error: 'imageBase64 is required' });
     }
+
+    const safeMimeType = /^image\/(jpeg|jpg|png|webp|heic|heif)$/i.test(String(mimeType || ''))
+      ? String(mimeType).toLowerCase()
+      : 'image/jpeg';
 
     const messages = [
       {
@@ -408,11 +471,20 @@ app.post('/ai/scan-receipt', async (req, res) => {
         content: [
           {
             type: 'image_url',
-            image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
+            image_url: { url: `data:${safeMimeType};base64,${imageBase64}` },
           },
           {
             type: 'text',
-            text: `Extract all food items from this receipt. Return ONLY valid JSON array:\n[{"name":"Whole Milk","price":3.99,"category":"dairy","isHealthy":true}]\nCategories: dairy, protein, vegetable, fruit, grain, snack, beverage, condiment, frozen, other`,
+            text: `Extract grocery line items from this receipt.
+Rules:
+- Return ONLY valid JSON array
+- Include item name and unit/line price for each purchased food item
+- Exclude subtotal, tax, total, card, payment, membership, cashier, IDs
+- Keep abbreviated names if needed (example: "GV WHOLE GAL")
+- Try to return as many valid food items as visible
+Format:
+[{"name":"Whole Milk","price":3.99,"category":"dairy","isHealthy":true}]
+Categories: dairy, protein, vegetable, fruit, grain, snack, beverage, condiment, frozen, other`,
           },
         ],
       },
@@ -434,16 +506,60 @@ app.post('/ai/scan-receipt', async (req, res) => {
 
     const text = await callModel(
       messages,
-      Number(maxOutputTokens) || 900,
+      Number(maxOutputTokens) || 1400,
       true,
       receiptSchema
     );
 
     let items;
     try {
-      items = await parseOrRepairJson(text, 'receipt items array', Number(maxOutputTokens) || 900);
+      items = await parseOrRepairJson(text, 'receipt items array', Number(maxOutputTokens) || 1400);
     } catch {
       items = extractReceiptItemsFromText(text);
+    }
+
+    items = normalizeReceiptItemsResponse(Array.isArray(items) ? items : []);
+
+    if (items.length < 3) {
+      try {
+        const retryMessages = [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: `data:${safeMimeType};base64,${imageBase64}` },
+              },
+              {
+                type: 'text',
+                text: `Second pass OCR: previous extraction had too few items.
+Return ONLY JSON array with as many grocery food line items as possible (target at least 8 when visible).
+Use format [{"name":"string","price":0.0,"category":"other","isHealthy":false}].`,
+              },
+            ],
+          },
+        ];
+
+        const retryText = await callModel(
+          retryMessages,
+          Math.max(Number(maxOutputTokens) || 1400, 1600),
+          true,
+          receiptSchema
+        );
+
+        let retryItems;
+        try {
+          retryItems = await parseOrRepairJson(retryText, 'receipt items array retry', Math.max(Number(maxOutputTokens) || 1400, 1600));
+        } catch {
+          retryItems = extractReceiptItemsFromText(retryText);
+        }
+
+        const normalizedRetryItems = normalizeReceiptItemsResponse(Array.isArray(retryItems) ? retryItems : []);
+        if (normalizedRetryItems.length > items.length) {
+          items = normalizedRetryItems;
+        }
+      } catch {
+      }
     }
 
     res.json({ items: Array.isArray(items) ? items : [] });
@@ -454,27 +570,77 @@ app.post('/ai/scan-receipt', async (req, res) => {
 
 app.post('/ai/scan-fridge', async (req, res) => {
   try {
-    const { imageBase64, maxOutputTokens } = req.body || {};
+    const { imageBase64, mimeType, maxOutputTokens } = req.body || {};
     if (!imageBase64) {
       return res.status(400).json({ error: 'imageBase64 is required' });
     }
+
+    const safeMimeType = /^image\/(jpeg|jpg|png|webp|heic|heif)$/i.test(String(mimeType || ''))
+      ? String(mimeType).toLowerCase()
+      : 'image/jpeg';
 
     const messages = [
       {
         role: 'user',
         content: [
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+          { type: 'image_url', image_url: { url: `data:${safeMimeType};base64,${imageBase64}` } },
           {
             type: 'text',
-            text: `Analyze this fridge image and list ingredients. Return ONLY valid JSON array:\n[{"name":"eggs","quantity":"6","category":"protein"}]`,
+            text: `Analyze this fridge image and list all visible food ingredients.
+Rules:
+- Return ONLY valid JSON array
+- Exclude non-food items and packaging-only text when unclear
+- Include as many visible ingredients as possible
+Format:
+[{"name":"eggs","quantity":"6","category":"protein"}]
+Categories: dairy, protein, vegetable, fruit, grain, snack, beverage, condiment, frozen, other`,
           },
         ],
       },
     ];
 
-    const text = await callModel(messages, Number(maxOutputTokens) || 700, true);
-    const ingredients = await parseOrRepairJson(text, 'fridge ingredients array', Number(maxOutputTokens) || 700);
-    res.json({ ingredients: Array.isArray(ingredients) ? ingredients : [] });
+    const fridgeSchema = {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING' },
+          quantity: { type: 'STRING' },
+          category: { type: 'STRING' },
+        },
+        required: ['name'],
+      },
+    };
+
+    const text = await callModel(messages, Number(maxOutputTokens) || 1200, true, fridgeSchema);
+    const parsed = await parseOrRepairJson(text, 'fridge ingredients array', Number(maxOutputTokens) || 1200);
+    let ingredients = normalizeFridgeIngredientsResponse(Array.isArray(parsed) ? parsed : []);
+
+    if (ingredients.length < 2) {
+      try {
+        const retryText = await callModel([
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${safeMimeType};base64,${imageBase64}` } },
+              {
+                type: 'text',
+                text: 'Second pass: extract all visible edible ingredients from this fridge image. Return ONLY JSON array as [{"name":"item","quantity":"1","category":"other"}].',
+              },
+            ],
+          },
+        ], Math.max(Number(maxOutputTokens) || 1200, 1400), true, fridgeSchema);
+
+        const retryParsed = await parseOrRepairJson(retryText, 'fridge ingredients array retry', Math.max(Number(maxOutputTokens) || 1200, 1400));
+        const retryIngredients = normalizeFridgeIngredientsResponse(Array.isArray(retryParsed) ? retryParsed : []);
+        if (retryIngredients.length > ingredients.length) {
+          ingredients = retryIngredients;
+        }
+      } catch {
+      }
+    }
+
+    res.json({ ingredients });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Fridge scan failed' });
   }
