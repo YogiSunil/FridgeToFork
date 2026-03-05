@@ -11,7 +11,7 @@ import { spacing, radius, typography, shadows } from '../../theme';
 import { generateRecipeThunk, saveRecipe, setSelectedCuisine } from '../../store/slices/recipesSlice';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const CUISINES = ['Any', 'Italian', 'Asian', 'Mexican', 'Indian', 'American', 'Mediterranean'];
 

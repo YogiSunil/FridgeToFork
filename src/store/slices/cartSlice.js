@@ -25,6 +25,17 @@ const normalizeReceiptItems = (items) => {
     .filter((item) => item.name);
 };
 
+const normalizeReceipt = (receipt) => {
+  const safeItems = normalizeReceiptItems(receipt?.items);
+  return {
+    id: String(receipt?.id || Date.now()),
+    items: safeItems,
+    swaps: Array.isArray(receipt?.swaps) ? receipt.swaps : [],
+    total: safeItems.reduce((sum, item) => sum + item.price, 0),
+    scannedAt: receipt?.scannedAt || new Date().toISOString(),
+  };
+};
+
 export const scanReceiptThunk = createAsyncThunk(
   'cart/scanReceipt',
   async (receiptInput, { rejectWithValue }) => {
@@ -82,14 +93,12 @@ const cartSlice = createSlice({
   },
   reducers: {
     saveReceipt(state, action) {
-      const safeItems = normalizeReceiptItems(action.payload.items);
-      const receipt = {
+      const receipt = normalizeReceipt({
         id: Date.now().toString(),
-        items: safeItems,
-        swaps: action.payload.swaps,
-        total: safeItems.reduce((s, i) => s + i.price, 0),
+        items: action.payload?.items,
+        swaps: action.payload?.swaps,
         scannedAt: new Date().toISOString(),
-      };
+      });
       state.receipts.unshift(receipt);
       setJSON('receipts', state.receipts);
 
@@ -97,6 +106,23 @@ const cartSlice = createSlice({
       if (monthly >= state.budgetGoal * 0.9) {
         sendBudgetAlert(monthly, state.budgetGoal);
       }
+    },
+    updateReceipt(state, action) {
+      const { id, items } = action.payload || {};
+      const index = state.receipts.findIndex((receipt) => receipt.id === id);
+      if (index < 0) return;
+
+      const current = state.receipts[index];
+      state.receipts[index] = normalizeReceipt({
+        ...current,
+        items,
+      });
+
+      setJSON('receipts', state.receipts);
+    },
+    deleteReceipt(state, action) {
+      state.receipts = state.receipts.filter((receipt) => receipt.id !== action.payload);
+      setJSON('receipts', state.receipts);
     },
     setBudgetGoal(state, action) {
       state.budgetGoal = action.payload;
@@ -133,7 +159,9 @@ const cartSlice = createSlice({
         state.error = action.payload;
       })
       .addCase(loadCartThunk.fulfilled, (state, action) => {
-        state.receipts = action.payload.receipts;
+        state.receipts = Array.isArray(action.payload.receipts)
+          ? action.payload.receipts.map(normalizeReceipt)
+          : [];
         state.budgetGoal = action.payload.budgetGoal;
       });
   },
@@ -141,6 +169,8 @@ const cartSlice = createSlice({
 
 export const {
   saveReceipt,
+  updateReceipt,
+  deleteReceipt,
   setBudgetGoal,
   clearCurrentItems,
 } = cartSlice.actions;

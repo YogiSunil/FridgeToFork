@@ -4,6 +4,7 @@ import { useTheme } from '../theme/ThemeContext';
 import CartHomeScreen from '../screens/Cart/CartHomeScreen';
 import ReceiptScanScreen from '../screens/Cart/ReceiptScanScreen';
 import SwapSuggestionScreen from '../screens/Cart/SwapSuggestionScreen';
+import ReceiptEditScreen from '../screens/Cart/ReceiptEditScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -33,6 +34,11 @@ export default function CartStack() {
         name="SwapSuggestion"
         component={SwapSuggestionScreen}
         options={{ title: 'Healthier Swaps' }}
+      />
+      <Stack.Screen
+        name="ReceiptEdit"
+        component={ReceiptEditScreen}
+        options={{ title: 'Edit Receipt' }}
       />
     </Stack.Navigator>
   );

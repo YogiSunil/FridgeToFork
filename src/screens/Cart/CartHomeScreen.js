@@ -1,14 +1,14 @@
 import React, { useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity,
-  StyleSheet,
+  StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { spacing, radius, typography, shadows } from '../../theme';
-import { loadCartThunk } from '../../store/slices/cartSlice';
+import { deleteReceipt, loadCartThunk } from '../../store/slices/cartSlice';
 
 const getLast7Days = (receipts) => {
   const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -30,6 +30,17 @@ export default function CartHomeScreen() {
   const { receipts, budgetGoal } = useSelector(s => s.cart);
 
   useEffect(() => { dispatch(loadCartThunk()); }, []);
+
+  const handleDelete = (receiptId) => {
+    Alert.alert('Delete Receipt', 'Are you sure you want to delete this receipt?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => dispatch(deleteReceipt(receiptId)),
+      },
+    ]);
+  };
 
   const now = new Date();
   const monthlySpend = receipts
@@ -113,6 +124,22 @@ export default function CartHomeScreen() {
               </Text>
             </View>
             <Text style={s.receiptItems}>{item.items.length} items scanned</Text>
+
+            <View style={s.actionsRow}>
+              <TouchableOpacity
+                style={s.editBtn}
+                onPress={() => nav.push('ReceiptEdit', { receiptId: item.id })}
+              >
+                <Text style={s.editBtnText}>✏️ Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.deleteBtn}
+                onPress={() => handleDelete(item.id)}
+              >
+                <Text style={s.deleteBtnText}>🗑 Delete</Text>
+              </TouchableOpacity>
+            </View>
+
             {item.swaps && item.swaps.length > 0 && (
               <TouchableOpacity
                 style={s.swapsBadge}
@@ -157,6 +184,11 @@ const styles = (c) => StyleSheet.create({
   receiptDate:   { ...typography.body, color: c.textSecondary },
   receiptTotal:  { ...typography.h4 },
   receiptItems:  { ...typography.bodyS, color: c.textMuted },
+  actionsRow:    { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  editBtn:       { backgroundColor: c.surfaceSecond, borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 6 },
+  editBtnText:   { ...typography.label, color: c.text },
+  deleteBtn:     { backgroundColor: c.error + '20', borderRadius: radius.md, paddingHorizontal: spacing.sm, paddingVertical: 6 },
+  deleteBtnText: { ...typography.label, color: c.error },
   swapsBadge:    { backgroundColor: c.primary + '20', borderRadius: radius.full, paddingHorizontal: spacing.sm, paddingVertical: 4, marginTop: spacing.xs, alignSelf: 'flex-start' },
   swapsBadgeText:{ ...typography.label, color: c.primary },
   empty:         { textAlign: 'center', ...typography.body, color: c.textMuted, marginTop: spacing.xxl, lineHeight: 28 },
