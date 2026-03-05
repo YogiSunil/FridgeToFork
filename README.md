@@ -1,478 +1,143 @@
-# FridgeToFork 🛒🍳
+# FridgeToFork (MVP)
 
-**FridgeToFork** is a React Native (Expo) mobile application that connects what you already have in your fridge with what you spend at the store.
+FridgeToFork is a mobile app that helps users cook from what they already have and track grocery spending.
 
-The goal is simple:
-- Reduce food waste
-- Cook smarter with AI-generated recipes from available ingredients
-- Track grocery spending accurately from receipts
-- Make healthier and cheaper purchase decisions over time
+The app solves three daily problems:
+- People forget what is already in the fridge.
+- People buy food without tracking spend clearly.
+- People struggle to decide what to cook from available ingredients.
 
----
-
-## Table of Contents
-
-1. [Project Vision](#project-vision)
-2. [Core User Journey](#core-user-journey)
-3. [Feature Scope](#feature-scope)
-4. [Module Architecture](#module-architecture)
-5. [Native Integrations](#native-integrations)
-6. [Tech Stack](#tech-stack)
-7. [Project Structure](#project-structure)
-8. [State Management Strategy (Redux)](#state-management-strategy-redux)
-9. [Data Persistence Strategy](#data-persistence-strategy)
-10. [AI Service Design](#ai-service-design)
-11. [Scoring and Dashboard Logic](#scoring-and-dashboard-logic)
-12. [Setup & Installation](#setup--installation)
-13. [Run Instructions](#run-instructions)
-14. [Step-by-Step Build Plan (Commit-Friendly)](#step-by-step-build-plan-commit-friendly)
-15. [Quality, Testing, and Reliability](#quality-testing-and-reliability)
-16. [Security & Privacy Notes](#security--privacy-notes)
-17. [Future Enhancements](#future-enhancements)
-18. [Contribution Guidelines](#contribution-guidelines)
+FridgeToFork connects these into one flow:
+1) Scan fridge -> ingredient list
+2) Generate recipe from ingredients
+3) Scan receipts -> expense and item history
+4) Save bought items back into fridge inventory
 
 ---
 
-## Project Vision
+## What This Project Does
 
-Most food apps solve one problem in isolation: either recipes or shopping or budgeting.
+### Chef Module
+- Scan fridge image (camera or gallery)
+- Show scanned fridge items in a review list
+- Generate AI recipe from current fridge inventory
+- Save recipes and open recipe details
 
-**FridgeToFork combines all three.**
-It bridges kitchen inventory, recipe generation, and grocery spending into one connected workflow.
+### Cart Module
+- Scan receipt image (camera or gallery)
+- Multi-receipt upload supported
+- Extract item names and prices
+- Generate healthier/cheaper swap suggestions
+- Save receipt and auto-merge purchased items into fridge inventory
 
-### Why this matters
-- People overbuy because they forget what they already have
-- People overspend because spending is tracked too late
-- People waste food because missing one ingredient blocks cooking
+### Home Module
+- Show quick stats: ingredients, recipes, receipts
+- Show budget progress and streak
+- Quick navigation actions for scans and recipes
 
-FridgeToFork helps users act earlier with better context.
-
----
-
-## Core User Journey
-
-1. User scans fridge with camera
-2. App detects available ingredients
-3. AI generates recipe using only available ingredients
-4. If something is missing, app suggests adding it to shopping list
-5. User scans grocery receipt
-6. App extracts items and prices
-7. App updates spending totals and compares against budget
-8. AI suggests healthier and cheaper swaps for future purchases
-
-This connected loop is the product’s main value.
+### Settings Module
+- Update username
+- Set monthly budget goal
+- Toggle notifications
+- Toggle dark mode
+- Clear local app data
 
 ---
 
-## Feature Scope
+## Screenshot Placeholders
 
-### ✅ Core Features (Target MVP)
+Add your screenshots in a folder named `docs/images` and replace file names below.
 
-### 🍳 Chef Module
-- Fridge scanner (camera-based ingredient detection)
-- Recipe generator using current fridge inventory
-- Step-by-step cooking instructions with timers
-- Save recipe to personal cookbook
-- Mark ingredients as used and update inventory
-- Cuisine preference filter (Italian, Asian, Mexican, etc.)
+### 1) Home Dashboard
+![Home Dashboard](docs/images/home-dashboard.png)
 
-### 🛒 Cart Module
-- Receipt scanner (camera OCR + item extraction)
-- Healthy swap suggestions
-- Cheaper swap suggestions
-- Weekly/monthly spending tracking
-- Budget goal and near-limit warning
-- Shopping list (manual + AI-assisted)
+### 2) Fridge Scan
+![Fridge Scan](docs/images/fridge-scan.png)
 
-### 🏠 Home Dashboard
-- Daily summary (calories, spending, fridge health)
-- Quick actions (scan fridge, scan receipt)
-- Logging streak tracker
-- Weekly AI summary card
+### 3) Fridge Scan Result (Item List)
+![Fridge Items](docs/images/fridge-items.png)
 
-### ⚙️ Settings
-- Username
-- Monthly budget goal
-- Dark/light mode toggle
-- Notification reminder toggle
-- Clear all app data
+### 4) Recipe Generation
+![Recipe Result](docs/images/recipe-result.png)
 
----
+### 5) Receipt Scan
+![Receipt Scan](docs/images/receipt-scan.png)
 
-## Module Architecture
+### 6) Receipt Parsed Items
+![Receipt Items](docs/images/receipt-items.png)
 
-The app is designed around **4 modules** that communicate through Redux slices:
+### 7) Swap Suggestions
+![Swap Suggestions](docs/images/swap-suggestions.png)
 
-1. **Chef Module**
-   - Owns fridge inventory and recipe generation flow
-2. **Cart Module**
-   - Owns receipts, spending history, and swap suggestions
-3. **Home Dashboard**
-   - Aggregates and summarizes cross-module data
-4. **Settings Module**
-   - Manages user preferences, app theme, reminders, and budget defaults
-
----
-
-## Native Integrations
-
-FridgeToFork uses native capabilities through Expo APIs:
-
-- **Camera (`expo-camera`)**
-  - Fridge scanning
-  - Receipt scanning
-
-- **Notifications (`expo-notifications`)**
-  - Daily reminder: “Time to log your meals!”
-  - Budget near-limit alerts
-
-- **Share API (`expo-sharing`)**
-  - Share recipe card externally
-
-- **Haptics (`expo-haptics`)**
-  - Feedback on successful scans, saves, and interactions
-
-- **Linking (`expo-linking`)**
-  - Open external recipe videos or supporting links
+### 8) Settings
+![Settings](docs/images/settings.png)
 
 ---
 
 ## Tech Stack
-
-- **Framework:** React Native with Expo
-- **Language:** JavaScript (React Native)
-- **Navigation:** React Navigation (bottom tabs + native stack)
-- **State:** Redux Toolkit + React Redux
-- **Persistence:** AsyncStorage
-- **Charts/Data UI:** Planned reusable chart components
-- **AI Integration:** Claude API (through utility client wrapper)
-
-### Current SDK Baseline
-- Expo SDK: `54.x`
-- React Native: `0.81.x`
-- React: `19.1.x`
+- React Native + Expo SDK 54
+- Redux Toolkit + AsyncStorage
+- React Navigation (tabs + stacks)
+- Node.js + Express backend
+- Google Gemini API (default AI provider)
 
 ---
 
 ## Project Structure
+- Mobile app: `App.js`, `src/`
+- API server: `server/index.js`
 
-Target architecture:
+---
 
-```text
-FridgeToFork/
-├── app.json
-├── App.js
-├── README.md
-├── src/
-│   ├── navigation/
-│   │   ├── RootNavigator.js
-│   │   ├── ChefStack.js
-│   │   ├── CartStack.js
-│   │   ├── HomeStack.js
-│   │   └── SettingsStack.js
-│   ├── screens/
-│   │   ├── Home/
-│   │   │   ├── HomeScreen.js
-│   │   │   └── NotificationsScreen.js
-│   │   ├── Chef/
-│   │   │   ├── ChefHomeScreen.js
-│   │   │   ├── FridgeScanScreen.js
-│   │   │   ├── RecipeResultScreen.js
-│   │   │   └── RecipeDetailScreen.js
-│   │   ├── Cart/
-│   │   │   ├── CartHomeScreen.js
-│   │   │   ├── ReceiptScanScreen.js
-│   │   │   └── SwapSuggestionScreen.js
-│   │   └── Settings/
-│   │       ├── SettingsHomeScreen.js
-│   │       ├── BudgetGoalScreen.js
-│   │       └── ThemeScreen.js
-│   ├── store/
-│   │   ├── index.js
-│   │   └── slices/
-│   │       ├── fridgeSlice.js
-│   │       ├── recipesSlice.js
-│   │       ├── cartSlice.js
-│   │       ├── swapsSlice.js
-│   │       └── settingsSlice.js
-│   ├── components/
-│   │   ├── RecipeCard.js
-│   │   ├── IngredientChip.js
-│   │   ├── SpendingChart.js
-│   │   ├── SwapCard.js
-│   │   ├── DailyScoreRing.js
-│   │   └── LoadingOverlay.js
-│   ├── theme/
-│   │   ├── index.js
-│   │   └── ThemeContext.js
-│   ├── hooks/
-│   │   ├── useTheme.js
-│   │   ├── useCamera.js
-│   │   └── useHaptics.js
-│   └── utils/
-│       ├── storage.js
-│       ├── claudeApi.js
-│       └── notifications.js
+## API Requirements
+
+You need one Google Gemini API key.
+
+### Backend env file
+Create `server/.env`:
+
+```env
+PORT=3000
+AI_PROVIDER=google
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_FALLBACK_MODELS=gemini-flash-latest,gemini-2.0-flash
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 ```
 
----
+### App env file
+Create root `.env`:
 
-## State Management Strategy (Redux)
-
-Redux slices are split by domain responsibility:
-
-- `fridgeSlice`
-  - ingredient inventory
-  - scan status
-  - last scan timestamp
-
-- `recipesSlice`
-  - generated recipes
-  - saved cookbook entries
-  - active cooking session
-
-- `cartSlice`
-  - scanned receipt items
-  - totals (daily/weekly/monthly)
-  - budget threshold status
-
-- `swapsSlice`
-  - healthier suggestions
-  - cheaper alternatives
-  - accepted swaps history
-
-- `settingsSlice`
-  - username
-  - theme mode
-  - budget goal
-  - notification preferences
-
-### Cross-slice outcomes
-- Missing ingredient from recipe can create shopping list candidate
-- Receipt totals update dashboard and budget alerts
-- Settings budget goal drives cart warning thresholds
-
----
-
-## Data Persistence Strategy
-
-AsyncStorage is used to persist user data locally:
-
-- Fridge inventory
-- Saved recipes
-- Receipt/spending history
-- User preferences
-- Theme selection
-- Budget goal
-
-### Persistence principles
-- Save on successful state mutation
-- Hydrate once at app launch
-- Keep storage keys centralized in `src/utils/storage.js`
-- Add versioned migration strategy as schema evolves
-
----
-
-## AI Service Design
-
-AI requests are routed through a single service layer (planned `src/utils/claudeApi.js`) to keep UI code clean.
-
-### Planned request types
-- `scanFridge(imageBase64)` → ingredient list
-- `generateRecipe(ingredients, cuisinePreference)` → recipe object
-- `scanReceipt(imageBase64)` → structured receipt items
-- `generateSwaps(items)` → healthier + cheaper alternatives
-- `generateWeeklySummary(metrics)` → dashboard narrative
-
-### Response handling rules
-- Always validate and normalize AI responses
-- Use strict fallback defaults if shape is invalid
-- Never block UI completely on AI failure
-- Surface actionable error states to user
-
----
-
-## Scoring and Dashboard Logic
-
-Daily score model (planned):
-
-- Fridge health: **30%**
-- Budget adherence: **40%**
-- Cooking streak consistency: **30%**
-
-Formula:
-
-```text
-DailyScore = (FridgeHealth * 0.30) + (BudgetAdherence * 0.40) + (StreakScore * 0.30)
+```env
+EXPO_PUBLIC_USE_MOCK_AI=false
+EXPO_PUBLIC_API_BASE_URL=http://YOUR_LAN_IP:3000
 ```
 
-This score is designed to be motivational, not punitive.
+Use your laptop LAN IP (not localhost) when testing on a physical phone.
 
 ---
 
-## Setup & Installation
+## Install and Run
 
-## Prerequisites
-
-- Node.js LTS (recommended: 20.x+)
-- npm (comes with Node)
-- Expo Go app on physical device
-- Same network for device + development machine
-
-## Install dependencies
-
+### 1) Install dependencies
 ```bash
 npm install
 ```
 
-If versions need realignment with Expo SDK:
-
+### 2) Run backend
 ```bash
-npx expo install --fix
+npm run api
 ```
 
----
-
-## Run Instructions
-
-Start Metro bundler:
-
-```bash
-npx expo start
-```
-
-Clear cache when needed:
-
+### 3) Run mobile app
 ```bash
 npx expo start -c
 ```
 
-Open on Android emulator:
-
-```bash
-npm run android
-```
-
-Open on iOS simulator (macOS only):
-
-```bash
-npm run ios
-```
-
-Open web preview:
-
-```bash
-npm run web
-```
-
 ---
 
-## Step-by-Step Build Plan (Commit-Friendly)
+## MVP Notes
+- If `npm run api` exits with port-in-use message, another backend process is already running on port 3000.
+- If AI requests time out, verify backend is running and phone + laptop are on same Wi-Fi.
+- Receipt and fridge scans work best with bright lighting and full image in frame.
 
-This project is intentionally developed in small, reviewable commits.
 
-### Milestone 1 — Foundation
-- Initialize Expo JavaScript app
-- Install dependencies
-- Validate SDK compatibility
-
-### Milestone 2 — Folder Scaffolding
-- Create full `src/` architecture
-- Add placeholder screens/components
-
-### Milestone 3 — Navigation + Store Wiring
-- Bottom tabs + stack navigators
-- Configure Redux store and providers
-
-### Milestone 4 — Chef Flow (MVP)
-- Fridge scan UI
-- Ingredient state updates
-- Recipe generation and save flow
-
-### Milestone 5 — Cart Flow (MVP)
-- Receipt scan UI
-- Spending aggregation
-- Swap suggestion screen
-
-### Milestone 6 — Dashboard Aggregation
-- Daily/weekly metrics
-- score card and streak display
-
-### Milestone 7 — Settings + Theme
-- Dark mode toggle with persistence
-- budget goal and notifications toggle
-
-### Milestone 8 — Polish
-- haptics, transitions, loading/error handling
-- documentation and demo readiness
-
----
-
-## Quality, Testing, and Reliability
-
-Planned quality practices:
-
-- Clear module boundaries for safer refactors
-- Domain-level utility functions for testable logic
-- Linting + formatting for consistency
-- Defensive parsing for AI and OCR responses
-- User-first error messaging for camera/API failures
-
----
-
-## Security & Privacy Notes
-
-- Receipt images and fridge photos may contain sensitive data.
-- Prefer processing with minimal retention.
-- Never hardcode API keys inside committed source code.
-- Store secrets using secure environment strategy (e.g., EAS secrets / CI secret variables).
-
----
-
-## Future Enhancements
-
-Post-MVP ideas:
-
-- Expiry tracking and food waste prevention
-- Weekly AI meal planner
-- Nutrition dashboard and macro tracking
-- Store locator integration
-- Voice ingredient input
-- Barcode scanning
-- Shared family inventory mode
-- Carbon footprint estimate
-- Price trend analysis
-
----
-
-## Contribution Guidelines
-
-When collaborating on this repository:
-
-1. Create focused branches per module/feature
-2. Keep commits small and descriptive
-3. Include screenshots for UI changes
-4. Update README sections when architecture evolves
-5. Verify app boots (`npx expo start`) before pushing
-
-Suggested commit style:
-
-- `feat(chef): add fridge scan screen scaffold`
-- `feat(cart): implement receipt parser slice`
-- `chore(theme): persist dark mode in settings`
-- `docs: expand README architecture and setup`
-
----
-
-## Current Status
-
-The project foundation is configured and running with Expo SDK 54 compatibility.
-
-Next immediate development focus:
-1. scaffold `src/` structure
-2. wire navigation and Redux providers
-3. implement Chef and Cart MVP flows
-
----
-
-Built with focus on practical UX, modular architecture, and demo-ready native capabilities.

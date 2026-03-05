@@ -1,7 +1,26 @@
+import Constants from 'expo-constants';
+
 let notificationsModule = null;
 let handlerInitialized = false;
 
+const EXPO_GO_NOTIFICATION_MESSAGE =
+  'Notifications are limited in Expo Go. Use a development build for full notification support.';
+
+const isExpoGo = () => {
+  const ownership = Constants?.appOwnership;
+  const executionEnvironment = Constants?.executionEnvironment;
+  return ownership === 'expo' || executionEnvironment === 'storeClient';
+};
+
+export const getNotificationsSupport = () => ({
+  supported: !isExpoGo(),
+  message: EXPO_GO_NOTIFICATION_MESSAGE,
+});
+
 const getNotifications = async () => {
+  if (isExpoGo()) {
+    return null;
+  }
   if (!notificationsModule) {
     notificationsModule = await import('expo-notifications');
   }
@@ -11,6 +30,7 @@ const getNotifications = async () => {
 const ensureHandler = async () => {
   if (handlerInitialized) return;
   const Notifications = await getNotifications();
+  if (!Notifications) return;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -23,6 +43,7 @@ const ensureHandler = async () => {
 
 export const requestNotificationPermission = async () => {
   const Notifications = await getNotifications();
+  if (!Notifications) return false;
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === 'granted') return true;
   const { status } = await Notifications.requestPermissionsAsync();
@@ -31,6 +52,7 @@ export const requestNotificationPermission = async () => {
 
 export const scheduleDailyMealReminder = async () => {
   const Notifications = await getNotifications();
+  if (!Notifications) return false;
   await ensureHandler();
   await Notifications.cancelAllScheduledNotificationsAsync();
   await Notifications.scheduleNotificationAsync({
@@ -45,10 +67,12 @@ export const scheduleDailyMealReminder = async () => {
       repeats: true,
     },
   });
+  return true;
 };
 
 export const sendBudgetAlert = async (spent, goal) => {
   const Notifications = await getNotifications();
+  if (!Notifications) return false;
   await ensureHandler();
   const pct = Math.round((spent / goal) * 100);
   await Notifications.scheduleNotificationAsync({
@@ -59,9 +83,12 @@ export const sendBudgetAlert = async (spent, goal) => {
     },
     trigger: null,
   });
+  return true;
 };
 
 export const cancelAllNotifications = async () => {
   const Notifications = await getNotifications();
+  if (!Notifications) return false;
   await Notifications.cancelAllScheduledNotificationsAsync();
+  return true;
 };

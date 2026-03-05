@@ -11,14 +11,20 @@ import SettingsStack from './SettingsStack';
 const Tab = createBottomTabNavigator();
 
 const TabIcon = ({ emoji, label, focused, color }) => (
-  <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 3 }}>
+  <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 3, width: 72 }}>
     <Text style={{ fontSize: focused ? 24 : 20 }}>{emoji}</Text>
-    <Text style={{
-      fontSize: 10,
-      color,
-      fontWeight: focused ? '600' : '400',
-      marginTop: 2,
-    }}>
+    <Text
+      numberOfLines={1}
+      ellipsizeMode="clip"
+      style={{
+        fontSize: 10,
+        color,
+        fontWeight: focused ? '600' : '400',
+        marginTop: 2,
+        textAlign: 'center',
+        width: '100%',
+      }}
+    >
       {label}
     </Text>
   </View>
@@ -39,6 +45,9 @@ export default function RootNavigator() {
           height: Platform.OS === 'ios' ? 84 : 64,
           paddingBottom: Platform.OS === 'ios' ? 24 : 8,
           ...shadows.sm,
+        },
+        tabBarItemStyle: {
+          paddingHorizontal: 2,
         },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,

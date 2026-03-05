@@ -11,7 +11,7 @@ import { spacing, radius, typography, shadows } from '../../theme';
 import { setUsername, setNotifications } from '../../store/slices/settingsSlice';
 import { clearFridge } from '../../store/slices/fridgeSlice';
 import { clearAll } from '../../utils/storage';
-import { requestNotificationPermission, scheduleDailyMealReminder, cancelAllNotifications } from '../../utils/notifications';
+import { requestNotificationPermission, scheduleDailyMealReminder, cancelAllNotifications, getNotificationsSupport } from '../../utils/notifications';
 import * as Haptics from 'expo-haptics';
 import * as Linking from 'expo-linking';
 
@@ -31,6 +31,14 @@ export default function SettingsHomeScreen() {
   };
 
   const handleNotifToggle = async (val) => {
+    const support = getNotificationsSupport();
+
+    if (!support.supported && val) {
+      Alert.alert('Notifications in Expo Go', support.message);
+      dispatch(setNotifications(false));
+      return;
+    }
+
     if (val) {
       const granted = await requestNotificationPermission();
       if (!granted) {
