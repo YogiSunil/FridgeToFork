@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, Animated, ActivityIndicator, Alert,
+  StyleSheet, Animated, ActivityIndicator, Alert, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch, useSelector } from 'react-redux';
@@ -50,10 +50,24 @@ export default function RecipeResultScreen() {
 
   const handleShare = async () => {
     if (!generated) return;
-    const text = `🍳 ${generated.title}\n\n${generated.description}\n\nIngredients:\n${safeIngredients.map(i => `• ${i.amount} ${i.name}`).join('\n')}\n\nSteps:\n${safeSteps.map(s => `${s.step}. ${s.instruction}`).join('\n')}\n\nShared from FridgeToFork 🥦`;
-    const uri = `${FileSystem.cacheDirectory}recipe.txt`;
-    await FileSystem.writeAsStringAsync(uri, text);
-    await Sharing.shareAsync(uri);
+    try {
+      const text = `🍳 ${generated.title}\n\n${generated.description}\n\nIngredients:\n${safeIngredients.map(i => `• ${i.amount} ${i.name}`).join('\n')}\n\nSteps:\n${safeSteps.map(s => `${s.step}. ${s.instruction}`).join('\n')}\n\nShared from FridgeToFork 🥦`;
+      const canUseFileShare = await Sharing.isAvailableAsync();
+
+      if (canUseFileShare) {
+        const uri = `${FileSystem.cacheDirectory}recipe.txt`;
+        await FileSystem.writeAsStringAsync(uri, text);
+        await Sharing.shareAsync(uri);
+        return;
+      }
+
+      await Share.share({
+        title: generated.title || 'Recipe',
+        message: text,
+      });
+    } catch (e) {
+      Alert.alert('Share Failed', e?.message || 'Could not share recipe right now.');
+    }
   };
 
   const s = styles(colors);
