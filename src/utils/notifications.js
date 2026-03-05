@@ -1,14 +1,28 @@
-import * as Notifications from 'expo-notifications';
+let notificationsModule = null;
+let handlerInitialized = false;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+const getNotifications = async () => {
+  if (!notificationsModule) {
+    notificationsModule = await import('expo-notifications');
+  }
+  return notificationsModule;
+};
+
+const ensureHandler = async () => {
+  if (handlerInitialized) return;
+  const Notifications = await getNotifications();
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+  handlerInitialized = true;
+};
 
 export const requestNotificationPermission = async () => {
+  const Notifications = await getNotifications();
   const { status: existing } = await Notifications.getPermissionsAsync();
   if (existing === 'granted') return true;
   const { status } = await Notifications.requestPermissionsAsync();
@@ -16,6 +30,8 @@ export const requestNotificationPermission = async () => {
 };
 
 export const scheduleDailyMealReminder = async () => {
+  const Notifications = await getNotifications();
+  await ensureHandler();
   await Notifications.cancelAllScheduledNotificationsAsync();
   await Notifications.scheduleNotificationAsync({
     content: {
@@ -32,6 +48,8 @@ export const scheduleDailyMealReminder = async () => {
 };
 
 export const sendBudgetAlert = async (spent, goal) => {
+  const Notifications = await getNotifications();
+  await ensureHandler();
   const pct = Math.round((spent / goal) * 100);
   await Notifications.scheduleNotificationAsync({
     content: {
@@ -44,5 +62,6 @@ export const sendBudgetAlert = async (spent, goal) => {
 };
 
 export const cancelAllNotifications = async () => {
+  const Notifications = await getNotifications();
   await Notifications.cancelAllScheduledNotificationsAsync();
 };

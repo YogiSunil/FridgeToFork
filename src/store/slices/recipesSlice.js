@@ -2,11 +2,47 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { generateRecipeWithClaude } from '../../utils/claudeApi';
 import { setJSON, getJSON } from '../../utils/storage';
 
+function normalizeRecipe(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const ingredients = Array.isArray(raw.ingredients)
+    ? raw.ingredients.map((ing, index) => ({
+        name: typeof ing?.name === 'string' ? ing.name : `Ingredient ${index + 1}`,
+        amount: typeof ing?.amount === 'string' ? ing.amount : 'as needed',
+      }))
+    : [];
+
+  const steps = Array.isArray(raw.steps)
+    ? raw.steps.map((step, index) => ({
+        step: Number(step?.step) || index + 1,
+        instruction: typeof step?.instruction === 'string'
+          ? step.instruction
+          : 'Follow this step.',
+        duration: typeof step?.duration === 'string' ? step.duration : undefined,
+      }))
+    : [];
+
+  return {
+    id: raw.id || `recipe-${Date.now()}`,
+    title: typeof raw.title === 'string' ? raw.title : 'Untitled Recipe',
+    description: typeof raw.description === 'string' ? raw.description : '',
+    cuisine: typeof raw.cuisine === 'string' ? raw.cuisine : 'Any',
+    prepTime: raw.prepTime || 'N/A',
+    cookTime: raw.cookTime || 'N/A',
+    servings: Number(raw.servings) || 1,
+    difficulty: raw.difficulty || 'Medium',
+    calories: raw.calories,
+    tips: typeof raw.tips === 'string' ? raw.tips : '',
+    ingredients,
+    steps,
+  };
+}
+
 export const generateRecipeThunk = createAsyncThunk(
   'recipes/generate',
   async ({ ingredients, cuisine }, { rejectWithValue }) => {
     try {
-      return await generateRecipeWithClaude(ingredients, cuisine);
+      return normalizeRecipe(await generateRecipeWithClaude(ingredients, cuisine));
     } catch (e) {
       return rejectWithValue(e.message || 'Failed to generate recipe');
     }
@@ -17,7 +53,8 @@ export const loadRecipesThunk = createAsyncThunk(
   'recipes/load',
   async () => {
     const stored = await getJSON('saved_recipes');
-    return stored ?? [];
+    if (!Array.isArray(stored)) return [];
+    return stored.map(normalizeRecipe).filter(Boolean);
   }
 );
 
@@ -32,9 +69,12 @@ const recipesSlice = createSlice({
   },
   reducers: {
     saveRecipe(state, action) {
-      const exists = state.saved.find(r => r.id === action.payload.id);
+      const normalized = normalizeRecipe(action.payload);
+      if (!normalized) return;
+
+      const exists = state.saved.find(r => r.id === normalized.id);
       if (!exists) {
-        state.saved.unshift(action.payload);
+        state.saved.unshift(normalized);
         setJSON('saved_recipes', state.saved);
       }
     },

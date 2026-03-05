@@ -1,5 +1,8 @@
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || '';
-const REQUEST_TIMEOUT_MS = 20000;
+const USE_MOCK_AI = process.env.EXPO_PUBLIC_USE_MOCK_AI === 'true';
+const REQUEST_TIMEOUT_MS = 45000;
+const MAX_RETRIES = 2;
+const RETRY_BACKOFF_MS = 1200;
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_IMAGE_BASE64_CHARS = 500000;
 const MAX_INGREDIENTS = 20;
@@ -16,9 +19,48 @@ function withTimeout(promise, timeoutMs = REQUEST_TIMEOUT_MS) {
   ]);
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetry(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('timed out') ||
+    message.includes('network request failed') ||
+    message.includes('fetch failed') ||
+    message.includes('failed to fetch')
+  );
+}
+
+async function fetchWithRetry(url, options) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      return await withTimeout(fetch(url, options));
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetry(error) || attempt === MAX_RETRIES) {
+        break;
+      }
+      await delay(RETRY_BACKOFF_MS * (attempt + 1));
+    }
+  }
+
+  if (String(lastError?.message || '').toLowerCase().includes('timed out')) {
+    throw new Error(`AI request timed out. Check API server and network reachability at ${API_BASE_URL}.`);
+  }
+
+  throw lastError || new Error('AI request failed');
+}
+
 async function postJson(path, payload) {
   if (!API_BASE_URL) {
-    throw new Error('Missing EXPO_PUBLIC_API_BASE_URL environment variable');
+    if (USE_MOCK_AI) {
+      return getMockResponse(path, payload);
+    }
+    throw new Error('Missing EXPO_PUBLIC_API_BASE_URL. Set it in .env (use your computer LAN IP, not localhost, when testing on phone).');
   }
 
   const cacheKey = getCacheKey(path, payload);
@@ -27,15 +69,13 @@ async function postJson(path, payload) {
     return cached.value;
   }
 
-  const response = await withTimeout(
-    fetch(`${API_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    })
-  );
+  const response = await fetchWithRetry(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
 
   let data = null;
   try {
@@ -51,6 +91,76 @@ async function postJson(path, payload) {
 
   responseCache.set(cacheKey, { value: data, savedAt: Date.now() });
   return data;
+}
+
+function getMockResponse(path, payload) {
+  if (path === '/ai/scan-fridge') {
+    return {
+      ingredients: [
+        { name: 'eggs', quantity: '6', category: 'protein' },
+        { name: 'milk', quantity: '1 carton', category: 'dairy' },
+        { name: 'tomatoes', quantity: '3', category: 'vegetable' },
+      ],
+    };
+  }
+
+  if (path === '/ai/generate-recipe') {
+    const ingredientList = Array.isArray(payload?.ingredients) && payload.ingredients.length
+      ? payload.ingredients
+      : ['eggs', 'milk', 'tomatoes'];
+
+    return {
+      recipe: {
+        title: 'Quick Fridge Omelette',
+        description: 'A fast and tasty way to use your fridge ingredients.',
+        cuisine: payload?.cuisinePreference || 'Any',
+        prepTime: '5 mins',
+        cookTime: '10 mins',
+        servings: 2,
+        difficulty: 'Easy',
+        calories: 380,
+        ingredients: ingredientList.map((name) => ({ name, amount: 'as needed' })),
+        steps: [
+          { step: 1, instruction: 'Whisk eggs and prep ingredients.', duration: '3 mins' },
+          { step: 2, instruction: 'Cook on medium heat and stir gently.', duration: '7 mins' },
+        ],
+        tips: 'Add herbs for extra flavor.',
+      },
+    };
+  }
+
+  if (path === '/ai/scan-receipt') {
+    return {
+      items: [
+        { name: 'Whole Milk', price: 3.99, category: 'dairy', isHealthy: true },
+        { name: 'White Bread', price: 2.79, category: 'grain', isHealthy: false },
+        { name: 'Tomatoes', price: 4.49, category: 'vegetable', isHealthy: true },
+      ],
+    };
+  }
+
+  if (path === '/ai/generate-swaps') {
+    return {
+      swaps: [
+        {
+          original: 'White Bread',
+          healthierSwap: 'Whole Wheat Bread',
+          healthierReason: 'Higher fiber and better satiety.',
+          cheaperSwap: 'Store Brand Whole Wheat',
+          cheaperReason: 'Similar nutrition at lower price.',
+          savings: 0.8,
+        },
+      ],
+    };
+  }
+
+  if (path === '/ai/weekly-summary') {
+    return {
+      summary: 'Nice progress this week. You balanced cooking at home with mindful grocery spending.',
+    };
+  }
+
+  return {};
 }
 
 function normalizeText(value) {

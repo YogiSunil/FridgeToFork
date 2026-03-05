@@ -2,6 +2,17 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { scanFridgeWithClaude } from '../../utils/claudeApi';
 import { setJSON, getJSON } from '../../utils/storage';
 
+const normalizeName = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+const toInt = (value, fallback = 0) => {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.floor(value);
+  if (typeof value === 'string') {
+    const parsed = parseInt(value.replace(/[^\d-]/g, ''), 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+};
+
 export const scanFridgeThunk = createAsyncThunk(
   'fridge/scan',
   async (base64Image, { rejectWithValue }) => {
@@ -69,6 +80,40 @@ const fridgeSlice = createSlice({
       })
       .addCase(loadFridgeThunk.fulfilled, (state, action) => {
         state.ingredients = action.payload;
+      })
+      .addMatcher(
+        (action) => action.type === 'cart/saveReceipt',
+        (state, action) => {
+          const receiptItems = Array.isArray(action.payload?.items) ? action.payload.items : [];
+          if (!receiptItems.length) return;
+
+          const merged = [...state.ingredients];
+
+          for (const item of receiptItems) {
+            const itemName = normalizeName(item?.name);
+            if (!itemName) continue;
+
+            const existingIndex = merged.findIndex((ingredient) => normalizeName(ingredient?.name) === itemName);
+            if (existingIndex >= 0) {
+              const existing = merged[existingIndex];
+              const nextQty = Math.max(toInt(existing?.quantity, 1), 1) + 1;
+              merged[existingIndex] = {
+                ...existing,
+                quantity: String(nextQty),
+                category: existing?.category || item?.category || 'other',
+              };
+              continue;
+            }
+
+            merged.push({
+              name: item.name,
+              quantity: '1',
+              category: item?.category || 'other',
+            });
+          }
+
+          state.ingredients = merged;
+          setJSON('fridge_ingredients', state.ingredients);
       });
   },
 });
