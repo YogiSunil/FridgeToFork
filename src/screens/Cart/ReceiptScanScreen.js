@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
@@ -32,6 +33,24 @@ const inferMimeType = (uri = '', fallback = 'image/jpeg') => {
   if (ext === 'heic') return 'image/heic';
   if (ext === 'heif') return 'image/heif';
   return fallback;
+};
+
+const toJpegBase64 = async ({ uri, base64 }) => {
+  if (base64 && base64.length > 2000) {
+    return { base64Data: base64, mimeType: 'image/jpeg' };
+  }
+
+  if (!uri) {
+    return { base64Data: '', mimeType: 'image/jpeg' };
+  }
+
+  const manipulated = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1600 } }],
+    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+  );
+
+  return { base64Data: manipulated?.base64 || '', mimeType: 'image/jpeg' };
 };
 
 export default function ReceiptScanScreen() {
@@ -78,7 +97,8 @@ export default function ReceiptScanScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.9 });
-      await processReceiptBase64(photo?.base64, inferMimeType(photo?.uri, 'image/jpeg'));
+      const prepared = await toJpegBase64({ uri: photo?.uri, base64: photo?.base64 });
+      await processReceiptBase64(prepared.base64Data, prepared.mimeType);
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Scan Failed', getErrorMessage(e, 'Could not read receipt. Try better lighting.'));
@@ -111,30 +131,29 @@ export default function ReceiptScanScreen() {
 
       if (selectedAssets.length === 1) {
         const selected = selectedAssets[0];
-        const mimeType = selected?.mimeType || inferMimeType(selected?.uri);
-        let base64Data = selected?.base64;
-
-        if (!base64Data && selected?.uri) {
-          base64Data = await FileSystem.readAsStringAsync(selected.uri, {
+        let prepared = await toJpegBase64({ uri: selected?.uri, base64: selected?.base64 });
+        if (!prepared.base64Data && selected?.uri) {
+          const fallbackBase64 = await FileSystem.readAsStringAsync(selected.uri, {
             encoding: FileSystem.EncodingType.Base64,
           });
+          prepared = { base64Data: fallbackBase64, mimeType: inferMimeType(selected?.uri) };
         }
 
-        await processReceiptBase64(base64Data, mimeType);
+        await processReceiptBase64(prepared.base64Data, prepared.mimeType);
         return;
       }
 
       let savedCount = 0;
       for (const asset of selectedAssets) {
         try {
-          const mimeType = asset?.mimeType || inferMimeType(asset?.uri);
-          let base64Data = asset?.base64;
-          if (!base64Data && asset?.uri) {
-            base64Data = await FileSystem.readAsStringAsync(asset.uri, {
+          let prepared = await toJpegBase64({ uri: asset?.uri, base64: asset?.base64 });
+          if (!prepared.base64Data && asset?.uri) {
+            const fallbackBase64 = await FileSystem.readAsStringAsync(asset.uri, {
               encoding: FileSystem.EncodingType.Base64,
             });
+            prepared = { base64Data: fallbackBase64, mimeType: inferMimeType(asset?.uri) };
           }
-          const items = await dispatch(scanReceiptThunk({ imageBase64: base64Data, mimeType })).unwrap();
+          const items = await dispatch(scanReceiptThunk({ imageBase64: prepared.base64Data, mimeType: prepared.mimeType })).unwrap();
           dispatch(saveReceipt({ items, swaps: [] }));
           savedCount += 1;
         } catch {

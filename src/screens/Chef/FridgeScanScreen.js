@@ -1,11 +1,13 @@
 import React, { useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity,
-  StyleSheet, Alert, ActivityIndicator,
+  StyleSheet, Alert, ActivityIndicator, FlatList,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
@@ -23,6 +25,24 @@ const inferMimeType = (uri = '', fallback = 'image/jpeg') => {
   return fallback;
 };
 
+const toJpegBase64 = async ({ uri, base64 }) => {
+  if (base64 && base64.length > 2000) {
+    return { base64Data: base64, mimeType: 'image/jpeg' };
+  }
+
+  if (!uri) {
+    return { base64Data: '', mimeType: 'image/jpeg' };
+  }
+
+  const manipulated = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: 1600 } }],
+    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+  );
+
+  return { base64Data: manipulated?.base64 || '', mimeType: 'image/jpeg' };
+};
+
 export default function FridgeScanScreen() {
   const { colors } = useTheme();
   const dispatch = useDispatch();
@@ -30,13 +50,16 @@ export default function FridgeScanScreen() {
   const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
+  const [phase, setPhase] = useState('scan');
+  const [scannedItems, setScannedItems] = useState([]);
 
   const processFridgeImage = async (imageBase64, mimeType = 'image/jpeg') => {
     if (!imageBase64 || imageBase64.length < 2000) {
       throw new Error('Image is too blurry or invalid. Please retake with better lighting.');
     }
 
-    await dispatch(scanFridgeThunk({ imageBase64, mimeType })).unwrap();
+    const ingredients = await dispatch(scanFridgeThunk({ imageBase64, mimeType })).unwrap();
+    return Array.isArray(ingredients) ? ingredients : [];
   };
 
   const takePicture = async () => {
@@ -48,16 +71,11 @@ export default function FridgeScanScreen() {
         base64: true,
         quality: 0.9,
       });
-      await processFridgeImage(photo?.base64, inferMimeType(photo?.uri, 'image/jpeg'));
+      const prepared = await toJpegBase64({ uri: photo?.uri, base64: photo?.base64 });
+      const ingredients = await processFridgeImage(prepared.base64Data, prepared.mimeType);
+      setScannedItems(ingredients);
+      setPhase('review');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        '✅ Fridge Scanned!',
-        'Ingredients identified successfully!',
-        [
-          { text: 'Generate Recipe', onPress: () => nav.navigate('RecipeResult') },
-          { text: 'Back to Kitchen', onPress: () => nav.goBack() },
-        ]
-      );
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Scan Failed', e.message || 'Could not scan fridge. Try again.');
@@ -85,25 +103,19 @@ export default function FridgeScanScreen() {
 
       if (result.canceled) return;
       const selected = result.assets?.[0];
-      const mimeType = selected?.mimeType || inferMimeType(selected?.uri);
-      let base64Data = selected?.base64;
+      let prepared = await toJpegBase64({ uri: selected?.uri, base64: selected?.base64 });
 
-      if (!base64Data && selected?.uri) {
-        base64Data = await FileSystem.readAsStringAsync(selected.uri, {
+      if (!prepared.base64Data && selected?.uri) {
+        const fallbackBase64 = await FileSystem.readAsStringAsync(selected.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
+        prepared = { base64Data: fallbackBase64, mimeType: inferMimeType(selected?.uri) };
       }
 
-      await processFridgeImage(base64Data, mimeType);
+      const ingredients = await processFridgeImage(prepared.base64Data, prepared.mimeType);
+      setScannedItems(ingredients);
+      setPhase('review');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        '✅ Fridge Scanned!',
-        'Ingredients identified successfully!',
-        [
-          { text: 'Generate Recipe', onPress: () => nav.navigate('RecipeResult') },
-          { text: 'Back to Kitchen', onPress: () => nav.goBack() },
-        ]
-      );
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Upload Failed', e?.message || 'Could not scan fridge image. Try a clearer photo.');
@@ -128,6 +140,45 @@ export default function FridgeScanScreen() {
           <Text style={styles(colors).uploadBtnLightText}>Upload Fridge Photo Instead</Text>
         </TouchableOpacity>
       </View>
+    );
+  }
+
+  if (phase === 'review') {
+    return (
+      <SafeAreaView style={styles(colors).safe}>
+        <FlatList
+          data={scannedItems}
+          keyExtractor={(item, index) => `${item?.name || 'item'}-${index}`}
+          ListHeaderComponent={
+            <View style={{ padding: spacing.md }}>
+              <Text style={styles(colors).phaseTitle}>✅ {scannedItems.length} Items Found</Text>
+              <Text style={styles(colors).phaseSub}>Review detected fridge ingredients</Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={styles(colors).itemRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles(colors).itemName}>{item?.name || 'Unknown item'}</Text>
+                <Text style={styles(colors).itemMeta}>{item?.category || 'other'}</Text>
+              </View>
+              <Text style={styles(colors).itemMeta}>{item?.quantity || '1'}</Text>
+            </View>
+          )}
+          ListFooterComponent={
+            <View style={{ padding: spacing.md, gap: spacing.sm }}>
+              <TouchableOpacity style={styles(colors).primaryBtn} onPress={() => nav.navigate('RecipeResult')}>
+                <Text style={styles(colors).primaryBtnText}>✨ Generate Recipe</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles(colors).secondaryBtn} onPress={() => nav.goBack()}>
+                <Text style={styles(colors).secondaryBtnText}>← Back to Kitchen</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles(colors).tertiaryBtn} onPress={() => setPhase('scan')}>
+                <Text style={styles(colors).tertiaryBtnText}>📸 Scan Again</Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
+      </SafeAreaView>
     );
   }
 
@@ -162,6 +213,7 @@ export default function FridgeScanScreen() {
 }
 
 const styles = (c) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.background },
   permContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg, backgroundColor: c.background },
   permTitle:     { ...typography.h3, color: c.text, textAlign: 'center', marginBottom: spacing.md },
   permDesc:      { ...typography.body, color: c.textSecondary, textAlign: 'center', marginBottom: spacing.lg },
@@ -178,4 +230,15 @@ const styles = (c) => StyleSheet.create({
   uploadBtnText: { ...typography.body, color: c.text },
   loadingBox:    { alignItems: 'center', gap: spacing.sm },
   loadingText:   { color: '#fff', ...typography.body },
+  phaseTitle:    { ...typography.h3, color: c.text, marginBottom: spacing.xs },
+  phaseSub:      { ...typography.body, color: c.textSecondary },
+  itemRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: c.surface, borderRadius: radius.md, padding: spacing.md, marginHorizontal: spacing.md, marginBottom: spacing.xs },
+  itemName:      { ...typography.body, color: c.text },
+  itemMeta:      { ...typography.bodyS, color: c.textSecondary },
+  primaryBtn:    { backgroundColor: c.primary, borderRadius: radius.lg, padding: spacing.md, alignItems: 'center', ...shadows.md },
+  primaryBtnText:{ ...typography.h4, color: '#fff' },
+  secondaryBtn:  { backgroundColor: c.surface, borderRadius: radius.lg, padding: spacing.md, alignItems: 'center' },
+  secondaryBtnText: { ...typography.body, color: c.text },
+  tertiaryBtn:   { alignItems: 'center', padding: spacing.sm },
+  tertiaryBtnText: { ...typography.bodyS, color: c.textSecondary },
 });

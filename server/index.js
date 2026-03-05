@@ -115,51 +115,69 @@ async function callGemini(messages, maxTokens = 800, forceJson = false, response
   requireGeminiKey();
 
   const modelsToTry = [GEMINI_MODEL, ...GEMINI_FALLBACK_MODELS.filter((model) => model !== GEMINI_MODEL)];
+  const maxAttemptsPerModel = 2;
   let lastErrorMessage = 'Gemini request failed';
 
   for (const model of modelsToTry) {
-    const response = await fetch(`${GEMINI_API_BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: toGeminiContents(messages),
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: maxTokens,
-          ...(forceJson ? { responseMimeType: 'application/json' } : {}),
-          ...((forceJson && responseSchema) ? { responseSchema } : {}),
+    for (let attempt = 0; attempt < maxAttemptsPerModel; attempt += 1) {
+      const response = await fetch(`${GEMINI_API_BASE_URL}/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({
+          contents: toGeminiContents(messages),
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: maxTokens,
+            ...(forceJson ? { responseMimeType: 'application/json' } : {}),
+            ...((forceJson && responseSchema) ? { responseSchema } : {}),
+          },
+        }),
+      });
 
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const message = data?.error?.message || data?.message || `Gemini API error ${response.status}`;
-      lastErrorMessage = message;
-      const unavailableModel = /not found|not available|not supported/i.test(message);
-      if (unavailableModel) {
-        continue;
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = data?.error?.message || data?.message || `Gemini API error ${response.status}`;
+        lastErrorMessage = message;
+
+        const unavailableModel = /not found|not available|not supported/i.test(message);
+        if (unavailableModel) {
+          break;
+        }
+
+        const transientImageIssue = /unable to process input image|internal error|temporarily unavailable|resource exhausted|deadline exceeded/i.test(message);
+        if (transientImageIssue && attempt < maxAttemptsPerModel - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+          continue;
+        }
+
+        throw new Error(message);
       }
-      throw new Error(message);
-    }
 
-    const parts = data?.candidates?.[0]?.content?.parts;
-    if (!Array.isArray(parts) || parts.length === 0) {
-      lastErrorMessage = `No response content from Gemini model ${model}`;
-      continue;
-    }
+      const parts = data?.candidates?.[0]?.content?.parts;
+      if (!Array.isArray(parts) || parts.length === 0) {
+        lastErrorMessage = `No response content from Gemini model ${model}`;
+        if (attempt < maxAttemptsPerModel - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          continue;
+        }
+        break;
+      }
 
-    const text = parts
-      .map((part) => part?.text || '')
-      .join('')
-      .trim();
+      const text = parts
+        .map((part) => part?.text || '')
+        .join('')
+        .trim();
 
-    if (text) {
-      return text;
+      if (text) {
+        return text;
+      }
+      lastErrorMessage = `Gemini model ${model} returned empty text response`;
+      if (attempt < maxAttemptsPerModel - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     }
-    lastErrorMessage = `Gemini model ${model} returned empty text response`;
   }
 
   throw new Error(lastErrorMessage);
@@ -349,9 +367,15 @@ function normalizeRecipeResponse(recipe, sourceIngredients = []) {
         .filter((item) => item.name)
     : [];
 
-  const finalIngredients = safeIngredients.length
-    ? safeIngredients
-    : inputIngredients.slice(0, 8).map((name) => ({ name, amount: 'as needed' }));
+  const fallbackIngredients = inputIngredients.length
+    ? inputIngredients.slice(0, 8).map((name) => ({ name, amount: 'as needed' }))
+    : [
+        { name: 'onion', amount: '1 medium' },
+        { name: 'tomato', amount: '2 medium' },
+        { name: 'salt', amount: 'to taste' },
+      ];
+
+  const finalIngredients = safeIngredients.length ? safeIngredients : fallbackIngredients;
 
   const safeSteps = Array.isArray(recipe?.steps)
     ? recipe.steps
@@ -696,14 +720,30 @@ app.post('/ai/generate-recipe', async (req, res) => {
       required: ['title', 'ingredients', 'steps'],
     };
 
-    const text = await callModel(
-      messages,
-      Number(maxOutputTokens) || 1100,
-      true,
-      recipeSchema
-    );
-    const parsed = await parseOrRepairJson(text, 'recipe object', Number(maxOutputTokens) || 1100);
-    const normalizedRecipe = normalizeRecipeResponse(parsed, ingredientList);
+    let normalizedRecipe;
+
+    try {
+      const text = await callModel(
+        messages,
+        Number(maxOutputTokens) || 1100,
+        true,
+        recipeSchema
+      );
+      const parsed = await parseOrRepairJson(text, 'recipe object', Number(maxOutputTokens) || 1100);
+      normalizedRecipe = normalizeRecipeResponse(parsed, ingredientList);
+    } catch {
+      normalizedRecipe = normalizeRecipeResponse({
+        title: ingredientList.length ? `Quick ${cuisinePreference} Recipe` : 'Quick Home Recipe',
+        description: 'Generated from available ingredients with fallback mode.',
+        cuisine: cuisinePreference,
+        prepTime: '10 mins',
+        cookTime: '20 mins',
+        servings: 2,
+        difficulty: 'Easy',
+        tips: 'Adjust seasoning and cook until done.',
+      }, ingredientList);
+    }
+
     res.json({ recipe: normalizedRecipe });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Recipe generation failed' });

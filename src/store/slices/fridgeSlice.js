@@ -13,13 +13,40 @@ const toInt = (value, fallback = 0) => {
   return fallback;
 };
 
+const mergeIngredients = (existingIngredients = [], incomingIngredients = []) => {
+  const merged = Array.isArray(existingIngredients) ? [...existingIngredients] : [];
+  const incoming = Array.isArray(incomingIngredients) ? incomingIngredients : [];
+
+  for (const item of incoming) {
+    const itemName = normalizeName(item?.name);
+    if (!itemName) continue;
+
+    const existingIndex = merged.findIndex((ingredient) => normalizeName(ingredient?.name) === itemName);
+    if (existingIndex >= 0) {
+      const existing = merged[existingIndex];
+      merged[existingIndex] = {
+        ...existing,
+        category: existing?.category || item?.category || 'other',
+        quantity: String(Math.max(toInt(existing?.quantity, 1), toInt(item?.quantity, 1), 1)),
+      };
+      continue;
+    }
+
+    merged.push({
+      name: item.name,
+      quantity: String(Math.max(toInt(item?.quantity, 1), 1)),
+      category: item?.category || 'other',
+    });
+  }
+
+  return merged;
+};
+
 export const scanFridgeThunk = createAsyncThunk(
   'fridge/scan',
   async (imageInput, { rejectWithValue }) => {
     try {
-      const ingredients = await scanFridgeWithClaude(imageInput);
-      await setJSON('fridge_ingredients', ingredients);
-      return ingredients;
+      return await scanFridgeWithClaude(imageInput);
     } catch (e) {
       return rejectWithValue(e.message || 'Failed to scan fridge');
     }
@@ -71,15 +98,16 @@ const fridgeSlice = createSlice({
       })
       .addCase(scanFridgeThunk.fulfilled, (state, action) => {
         state.loading = false;
-        state.ingredients = action.payload;
+        state.ingredients = mergeIngredients(state.ingredients, action.payload);
         state.lastScanned = new Date().toISOString();
+        setJSON('fridge_ingredients', state.ingredients);
       })
       .addCase(scanFridgeThunk.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
       .addCase(loadFridgeThunk.fulfilled, (state, action) => {
-        state.ingredients = action.payload;
+        state.ingredients = Array.isArray(action.payload) ? action.payload : [];
       })
       .addMatcher(
         (action) => action.type === 'cart/saveReceipt',
@@ -87,32 +115,13 @@ const fridgeSlice = createSlice({
           const receiptItems = Array.isArray(action.payload?.items) ? action.payload.items : [];
           if (!receiptItems.length) return;
 
-          const merged = [...state.ingredients];
+          const receiptIngredients = receiptItems.map((item) => ({
+            name: item?.name,
+            quantity: '1',
+            category: item?.category || 'other',
+          }));
 
-          for (const item of receiptItems) {
-            const itemName = normalizeName(item?.name);
-            if (!itemName) continue;
-
-            const existingIndex = merged.findIndex((ingredient) => normalizeName(ingredient?.name) === itemName);
-            if (existingIndex >= 0) {
-              const existing = merged[existingIndex];
-              const nextQty = Math.max(toInt(existing?.quantity, 1), 1) + 1;
-              merged[existingIndex] = {
-                ...existing,
-                quantity: String(nextQty),
-                category: existing?.category || item?.category || 'other',
-              };
-              continue;
-            }
-
-            merged.push({
-              name: item.name,
-              quantity: '1',
-              category: item?.category || 'other',
-            });
-          }
-
-          state.ingredients = merged;
+          state.ingredients = mergeIngredients(state.ingredients, receiptIngredients);
           setJSON('fridge_ingredients', state.ingredients);
       });
   },
